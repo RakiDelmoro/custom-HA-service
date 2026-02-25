@@ -1,0 +1,33 @@
+name: "Custom HA Service"
+version: "0.1.0"
+slug: custom-ha-service
+description: "A custom service that subscribes to MQTT topics and publishes responses"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+init: false
+startup: system
+boot: auto
+host_network: true
+map:
+  - share:rw
+  - config:rw
+options:
+  mqtt_broker: "homeassistant"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  subscribe_topic: "custom-service/in"
+  publish_topic: "custom-service/out"
+  client_id: "custom-ha-service"
+schema:
+  mqtt_broker: str
+  mqtt_port: int
+  mqtt_username: str?
+  mqtt_password: str?
+  subscribe_topic: str
+  publish_topic: str
+  client_id: str

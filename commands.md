@@ -1,0 +1,9 @@
+vscode ➜ /workspaces/custom-HA-service (main) $ export RUST_LOG=info
+vscode ➜ /workspaces/custom-HA-service (main) $ export MQTT_BROKER=192.168.50.47
+vscode ➜ /workspaces/custom-HA-service (main) $ export MQTT_PORT=1883
+vscode ➜ /workspaces/custom-HA-service (main) $ export MQTT_USERNAME=mqtt_indicator_1
+vscode ➜ /workspaces/custom-HA-service (main) $ export MQTT_PASSWORD=mqtt
+vscode ➜ /workspaces/custom-HA-service (main) $ export SUBSCRIBE_TOPIC=custom-service/in
+vscode ➜ /workspaces/custom-HA-service (main) $ export PUBLISH_TOPIC=custom-service/out
+vscode ➜ /workspaces/custom-HA-service (main) $ export CLIENT_ID=custom-ha-service-test
+vscode ➜ /workspaces/custom-HA-service (main) $ cargo run

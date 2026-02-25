@@ -1,0 +1,55 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "togetherai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://api.together.xyz/v1",
+        "apiKey": "tgp_v1_k93_lAjaTPnQxt5J-AE9u9WRnneNR_LephNllUbocto"
+      },
+      "models": {
+        "moonshotai/Kimi-K2.5": {}
+      }
+    },
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://ollama:11434/v1"
+      },
+      "models": {
+        "qwen3:8b": { "model": "qwen3:8b" }
+      }
+    }
+  },
+  "model": "togetherai/moonshotai/Kimi-K2.5",
+  "agent": {
+    "explore": {
+      "model": "ollama/qwen3:8b",
+      "instructions": "You are a fast file and codebase explorer. Search, read, summarize, and map out files, directories, and symbols. Keep responses concise and factual."
+    },
+    "grep": {
+      "model": "ollama/qwen3:8b",
+      "instructions": "You are a search specialist. Find patterns, usages, imports, and references across the codebase quickly and accurately."
+    },
+    "summarize": {
+      "model": "ollama/qwen3:8b",
+      "instructions": "You summarize files, diffs, changelogs, and error logs into clear, brief descriptions."
+    },
+    "plan": {
+      "model": "togetherai/moonshotai/Kimi-K2.5",
+      "instructions": "You are a planning agent. Deeply analyze the task and codebase context provided, identify edge cases, dependencies, and risks, then produce a clear ordered step-by-step plan before any code is written."
+    },
+    "code": {
+      "model": "togetherai/moonshotai/Kimi-K2.5",
+      "instructions": "You are the primary coding agent. Write, edit, refactor, and debug code with high accuracy. Handle complex multi-file changes, architecture decisions, and difficult bugs."
+    },
+    "architect": {
+      "model": "togetherai/moonshotai/Kimi-K2.5",
+      "instructions": "You are a senior software architect. Design systems, plan large refactors, choose technologies, and reason about scalability and maintainability."
+    },
+    "websearch": {
+      "model": "togetherai/moonshotai/Kimi-K2.5",
+      "instructions": "You are a web research agent. Search the internet for documentation, API references, error solutions, package info, and technical resources. Summarize findings clearly and cite sources."
+    }
+  }
+}
