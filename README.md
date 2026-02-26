@@ -13,11 +13,21 @@ MQTT service that converts pulse sensor data to flow rates (L/min) for Home Assi
 
 ## Quick Install
 
-Add to Home Assistant:
+### Option 1: Use Directly (Recommended)
+
+Add this repository to your Home Assistant:
 
 1. Go to **Settings** → **Add-ons** → **Add-on Store**
-2. Click **⋮** → **Repositories** → Add `https://github.com/YOUR_USERNAME/custom-ha-service`
+2. Click **⋮** → **Repositories** → Add `https://github.com/RakiDelmoro/custom-ha-service`
 3. Find "Custom HA Service" → **Install** → **Start**
+
+### Option 2: Fork & Customize
+
+Want to modify the code? Fork this repository first:
+
+1. Click **Fork** button on [GitHub](https://github.com/RakiDelmoro/custom-ha-service)
+2. Add your forked repo URL in Home Assistant (same steps as above)
+3. Modify code → Push changes → Update in HA
 
 ## Configuration
 
@@ -114,6 +124,16 @@ export PUBLISH_TOPIC=custom-service/out
 export PULSES_PER_LITER=433
 ./target/release/custom-ha-service
 ```
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
