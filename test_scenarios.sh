@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Comprehensive Test Script for Custom HA Service
-# Tests all scenarios with mock MQTT data
+# Test Script for Custom HA Service
+# Tests scenarios with mock MQTT data
+# Note: Service only publishes when subscriber message arrives
 
 set -e
 
@@ -45,9 +46,10 @@ LOG_FILE="test_output_$(date +%Y%m%d_%H%M%S).log"
 echo "Test started at: $(date)" > $LOG_FILE
 echo "" >> $LOG_FILE
 
-echo -e "${GREEN}=== TEST SCENARIO 1: Initial Zero Publishing ===${NC}"
-echo "Expected: Zero entries every 1 second for 3 seconds"
-echo "Format: {\"timestamp\":\"25 Feb 2026 10:00:01\",\"flow_rate_lpm\":0.0}"
+echo -e "${GREEN}=== TEST SCENARIO 1: First Data Message ===${NC}"
+echo "Input: {\"total_pulses\": 433, \"Time_ms\": 1000}"
+echo "Expected: Array with single entry at receive time"
+echo "Format: [{\"timestamp\":\"25 Feb 2026 10:00:05\",\"flow_rate_lpm\":60.0}]"
 echo ""
 
 # Start the service in background
@@ -56,27 +58,17 @@ echo -e "${YELLOW}Starting service...${NC}"
 SERVICE_PID=$!
 sleep 1
 
-echo -e "${YELLOW}Waiting 3 seconds for zero publishing...${NC}"
-sleep 3
-
-echo -e "${GREEN}✓ Scenario 1 Complete${NC}"
-echo ""
-
-echo -e "${GREEN}=== TEST SCENARIO 2: First Data Message ===${NC}"
-echo "Input: {\"total_pulses\": 433, \"Time_ms\": 1000}"
-echo "Expected: Single entry with timestamp: \"25 Feb 2026 10:00:05\" and L/min"
-echo ""
-
 mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 433, "Time_ms": 1000}' -q 1
 echo -e "${YELLOW}Message sent, waiting for processing...${NC}"
 sleep 2
 
-echo -e "${GREEN}✓ Scenario 2 Complete${NC}"
+echo -e "${GREEN}✓ Scenario 1 Complete${NC}"
 echo ""
 
-echo -e "${GREEN}=== TEST SCENARIO 3: Normal Follow-up ===${NC}"
+echo -e "${GREEN}=== TEST SCENARIO 2: Normal Follow-up (No Gap) ===${NC}"
 echo "Input: {\"total_pulses\": 433, \"Time_ms\": 1000}"
-echo "Expected: Single entry, no gap detected"
+echo "Expected: Array with single entry, no gap detected"
+echo "Format: [{\"timestamp\":\"25 Feb 2026 10:00:06\",\"flow_rate_lpm\":60.0}]"
 echo ""
 
 sleep 1
@@ -84,17 +76,18 @@ mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 433, "Tim
 echo -e "${YELLOW}Message sent, waiting for processing...${NC}"
 sleep 2
 
-echo -e "${GREEN}✓ Scenario 3 Complete${NC}"
+echo -e "${GREEN}✓ Scenario 2 Complete${NC}"
 echo ""
 
-echo -e "${GREEN}=== TEST SCENARIO 4: Gap Detection ===${NC}"
+echo -e "${GREEN}=== TEST SCENARIO 3: Gap Detection ===${NC}"
 echo "Simulating 5 second gap..."
 echo "Input: {\"total_pulses\": 866, \"Time_ms\": 2000}"
 echo "Expected: Array with gap zeros + actual data"
 echo "Format example: ["
 echo '  {"timestamp":"25 Feb 2026 10:00:07","flow_rate_lpm":0.0},'
 echo '  {"timestamp":"25 Feb 2026 10:00:08","flow_rate_lpm":0.0},'
-echo '  {"timestamp":"25 Feb 2026 10:00:09","flow_rate_lpm":60.0}'
+echo '  {"timestamp":"25 Feb 2026 10:00:09","flow_rate_lpm":60.0},'
+echo '  {"timestamp":"25 Feb 2026 10:00:10","flow_rate_lpm":60.0}'
 echo "]"
 echo ""
 
@@ -105,22 +98,12 @@ mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 866, "Tim
 echo -e "${YELLOW}Message sent after gap, waiting for processing...${NC}"
 sleep 2
 
-echo -e "${GREEN}✓ Scenario 4 Complete${NC}"
+echo -e "${GREEN}✓ Scenario 3 Complete${NC}"
 echo ""
 
-echo -e "${GREEN}=== TEST SCENARIO 5: Zero Publishing Resumes ===${NC}"
-echo "Expected: Zero entries resume after gap message"
-echo "Format: {\"timestamp\":\"25 Feb 2026 10:00:14\",\"flow_rate_lpm\":0.0}"
-echo ""
-
-echo -e "${YELLOW}Waiting 3 seconds for zero publishing to resume...${NC}"
-sleep 3
-
-echo -e "${GREEN}✓ Scenario 5 Complete${NC}"
-echo ""
-
-echo -e "${GREEN}=== TEST SCENARIO 6: Multiple Messages ===${NC}"
+echo -e "${GREEN}=== TEST SCENARIO 4: Multiple Rapid Messages ===${NC}"
 echo "Sending 3 rapid messages..."
+echo "Expected: 3 separate array publications (0.5s apart)"
 echo ""
 
 mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 200, "Time_ms": 1000}' -q 1
@@ -132,7 +115,49 @@ mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 400, "Tim
 echo -e "${YELLOW}Messages sent, waiting...${NC}"
 sleep 3
 
-echo -e "${GREEN}✓ Scenario 6 Complete${NC}"
+echo -e "${GREEN}✓ Scenario 4 Complete${NC}"
+echo ""
+
+echo -e "${GREEN}=== TEST SCENARIO 5: Large Data Window ===${NC}"
+echo "Input: {\"total_pulses\": 2165, \"Time_ms\": 5000} (5 seconds of data)"
+echo "Expected: Array with 5 entries, all same L/min"
+echo "Format: ["
+echo '  {"timestamp":"...","flow_rate_lpm":60.0},'
+echo '  {"timestamp":"...","flow_rate_lpm":60.0},'
+echo '  {"timestamp":"...","flow_rate_lpm":60.0},'
+echo '  {"timestamp":"...","flow_rate_lpm":60.0},'
+echo '  {"timestamp":"...","flow_rate_lpm":60.0}'
+echo "]"
+echo ""
+
+mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 2165, "Time_ms": 5000}' -q 1
+echo -e "${YELLOW}Message sent, waiting for processing...${NC}"
+sleep 2
+
+echo -e "${GREEN}✓ Scenario 5 Complete${NC}"
+echo ""
+
+echo -e "${GREEN}=== TEST SCENARIO 6: Silent Period (No Publishing) ===${NC}"
+echo "Waiting 5 seconds without sending messages..."
+echo "Expected: NO OUTPUT - service is silent when no data received"
+echo ""
+
+echo -e "${YELLOW}Waiting 5 seconds (no messages sent)...${NC}"
+sleep 5
+
+echo -e "${GREEN}✓ Scenario 6 Complete - No output expected during silence${NC}"
+echo ""
+
+echo -e "${GREEN}=== TEST SCENARIO 7: Message After Silent Period ===${NC}"
+echo "After 5s silence, sending message..."
+echo "Expected: Array with gap-filled zeros + actual data"
+echo ""
+
+mosquitto_pub -h $MQTT_BROKER -t $SUBSCRIBE_TOPIC -m '{"total_pulses": 433, "Time_ms": 1000}' -q 1
+echo -e "${YELLOW}Message sent after silence, waiting for processing...${NC}"
+sleep 2
+
+echo -e "${GREEN}✓ Scenario 7 Complete${NC}"
 echo ""
 
 # Cleanup
@@ -146,7 +171,7 @@ echo -e "Log file: ${YELLOW}$LOG_FILE${NC}"
 echo ""
 echo -e "${YELLOW}Key log entries (showing timestamps with month names):${NC}"
 echo "---"
-grep -E "(Starting|Published|Received|Processing|Gap detected|Skipping duplicate|timestamp.*Feb)" $LOG_FILE | head -50
+grep -E "(Starting|Published|Received|Processing|Gap detected|timestamp.*Feb)" $LOG_FILE | head -50
 echo "---"
 echo ""
 echo "To see full output, run: cat $LOG_FILE"
@@ -156,3 +181,9 @@ echo "  - Day: 25"
 echo "  - Month: Feb (short month name)"
 echo "  - Year: 2026"
 echo "  - Time: 10:00:01 (HH:MM:SS)"
+echo ""
+echo "Service Behavior:"
+echo "  ✓ Only publishes when subscriber message arrives"
+echo "  ✓ All outputs are JSON arrays"
+echo "  ✓ Gap filling with zeros still works"
+echo "  ✓ No periodic zero publishing between messages"

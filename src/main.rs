@@ -5,17 +5,13 @@ mod state;
 
 use rumqttc::{AsyncClient, ConnAck, Event, EventLoop, Incoming, MqttOptions, Outgoing, Publish, QoS, SubAck};
 use std::time::Duration;
-use tokio::time::{interval, sleep};
+use tokio::time::sleep;
 use log::{info, error, debug, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use config::Config;
 use models::SensorData;
-use processor::{process_sensor_data, generate_zero_entry};
+use processor::process_sensor_data;
 use state::{create_state, current_time_ms, SharedState};
-
-// Flag to track if we should publish zeros (set to false when data received, true after processing)
-static SHOULD_PUBLISH_ZEROS: AtomicBool = AtomicBool::new(true);
 
 async fn create_mqtt_client(config: &Config) -> (AsyncClient, EventLoop) {
     let mut mqttoptions = MqttOptions::new(&config.client_id, &config.mqtt_broker, config.mqtt_port);
@@ -32,39 +28,6 @@ async fn create_mqtt_client(config: &Config) -> (AsyncClient, EventLoop) {
 
 async fn subscribe_to_topic(client: &AsyncClient, topic: &str) -> Result<(), rumqttc::ClientError> {
     client.subscribe(topic, QoS::AtLeastOnce).await
-}
-
-async fn publish_zero_entry(
-    client: &AsyncClient, 
-    topic: &str,
-    state: SharedState,
-) -> Result<(), rumqttc::ClientError> {
-    let zero_entry = generate_zero_entry();
-    
-    // Check for duplicate timestamp using HashSet
-    let should_publish = {
-        let mut state_guard = state.lock().unwrap();
-        state_guard.should_publish_zero(&zero_entry.timestamp)
-    };
-    
-    if !should_publish {
-        debug!("Skipping duplicate zero entry for timestamp: {}", zero_entry.timestamp);
-        return Ok(());
-    }
-    
-    // Serialize just the entry (not wrapped in OutputMessage)
-    let response = match serde_json::to_string(&zero_entry) {
-        Ok(json) => json,
-        Err(e) => {
-            error!("Failed to serialize zero entry: {}", e);
-            return Ok(());
-        }
-    };
-    
-    client.publish(topic, QoS::AtLeastOnce, false, response).await?;
-    info!("Published zero flow entry: {}", zero_entry.timestamp);
-    
-    Ok(())
 }
 
 async fn handle_message(
@@ -95,9 +58,6 @@ async fn handle_message(
         sensor_data.total_pulses, sensor_data.time_ms
     );
     
-    // Stop zero publishing while we process this message
-    SHOULD_PUBLISH_ZEROS.store(false, Ordering::SeqCst);
-    
     // Process the data
     let output = {
         let mut state_guard = state.lock().unwrap();
@@ -105,8 +65,6 @@ async fn handle_message(
         process_sensor_data(
             sensor_data,
             &mut state_guard,
-            config.gap_fill_mode,
-            config.gap_threshold_ms,
             config.pulses_per_liter,
             receive_time_ms,
         )
@@ -132,30 +90,15 @@ async fn handle_message(
     // Skip if all timestamps already published
     if entries_to_publish.is_empty() {
         info!("All timestamps already published, skipping");
-        SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
         return Ok(());
     }
     
-    // Serialize: plain object for single entry, array for multiple (Question 2)
-    let response = if entries_to_publish.len() == 1 {
-        // Single entry: plain object
-        match serde_json::to_string(&entries_to_publish[0]) {
-            Ok(json) => json,
-            Err(e) => {
-                error!("Failed to serialize output: {}", e);
-                SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
-                return Ok(());
-            }
-        }
-    } else {
-        // Multiple entries: array
-        match serde_json::to_string(&entries_to_publish) {
-            Ok(json) => json,
-            Err(e) => {
-                error!("Failed to serialize output: {}", e);
-                SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
-                return Ok(());
-            }
+    // Serialize: always as array
+    let response = match serde_json::to_string(&entries_to_publish) {
+        Ok(json) => json,
+        Err(e) => {
+            error!("Failed to serialize output: {}", e);
+            return Ok(());
         }
     };
     
@@ -179,9 +122,6 @@ async fn handle_message(
     
     debug!("Published data: {}", response);
     
-    // Resume zero publishing
-    SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
-    
     Ok(())
 }
 
@@ -197,8 +137,6 @@ async fn main() {
     info!("Subscribe topic: {}", config.subscribe_topic);
     info!("Publish topic: {}", config.publish_topic);
     info!("Pulses per liter: {}", config.pulses_per_liter);
-    info!("Gap fill mode: {:?}", config.gap_fill_mode);
-    info!("Gap threshold: {} ms", config.gap_threshold_ms);
     
     loop {
         info!("Connecting to MQTT broker...");
@@ -215,63 +153,39 @@ async fn main() {
         }
 
         info!("Connected and subscribed. Waiting for sensor data...");
-        info!("Will publish zero entries every 1 second when no data received");
-        
-        // Create a 1-second interval timer for zero publishing
-        let mut zero_timer = interval(Duration::from_secs(1));
-        // Allow the first tick to fire immediately
-        zero_timer.tick().await;
-        
-        // Create a shared reference to client for the timer
-        let client_for_timer = client.clone();
-        let publish_topic = config.publish_topic.clone();
         
         // Main event loop
         loop {
-            tokio::select! {
-                // Handle MQTT events
-                event = eventloop.poll() => {
-                    match event {
-                        Ok(Event::Incoming(Incoming::Publish(publish))) => {
-                            if let Err(e) = handle_message(&client, &publish, &config, state.clone()).await {
-                                error!("Error handling message: {}", e);
-                            }
-                        }
-                        Ok(Event::Incoming(Incoming::ConnAck(ConnAck { session_present, .. }))) => {
-                            if !session_present {
-                                // Re-subscribe if session is not present
-                                if let Err(e) = subscribe_to_topic(&client, &config.subscribe_topic).await {
-                                    error!("Failed to re-subscribe: {}", e);
-                                    break;
-                                }
-                            }
-                        }
-                        Ok(Event::Incoming(Incoming::SubAck(SubAck { pkid, .. }))) => {
-                            debug!("Subscription {} acknowledged", pkid);
-                        }
-                        Ok(Event::Outgoing(Outgoing::Publish(pkid))) => {
-                            debug!("Publish {} sent", pkid);
-                        }
-                        Ok(Event::Outgoing(Outgoing::Subscribe(pkid))) => {
-                            debug!("Subscribe {} sent", pkid);
-                        }
-                        Ok(_) => {
-                            // Other events, ignore
-                        }
-                        Err(e) => {
-                            error!("Connection error: {:?}", e);
+            match eventloop.poll().await {
+                Ok(Event::Incoming(Incoming::Publish(publish))) => {
+                    if let Err(e) = handle_message(&client, &publish, &config, state.clone()).await {
+                        error!("Error handling message: {}", e);
+                    }
+                }
+                Ok(Event::Incoming(Incoming::ConnAck(ConnAck { session_present, .. }))) => {
+                    if !session_present {
+                        // Re-subscribe if session is not present
+                        if let Err(e) = subscribe_to_topic(&client, &config.subscribe_topic).await {
+                            error!("Failed to re-subscribe: {}", e);
                             break;
                         }
                     }
                 }
-                
-                // Handle 1-second interval for zero publishing
-                _ = zero_timer.tick() => {
-                    if SHOULD_PUBLISH_ZEROS.load(Ordering::SeqCst) {
-                        if let Err(e) = publish_zero_entry(&client_for_timer, &publish_topic, state.clone()).await {
-                            error!("Failed to publish zero entry: {}", e);
-                        }
-                    }
+                Ok(Event::Incoming(Incoming::SubAck(SubAck { pkid, .. }))) => {
+                    debug!("Subscription {} acknowledged", pkid);
+                }
+                Ok(Event::Outgoing(Outgoing::Publish(pkid))) => {
+                    debug!("Publish {} sent", pkid);
+                }
+                Ok(Event::Outgoing(Outgoing::Subscribe(pkid))) => {
+                    debug!("Subscribe {} sent", pkid);
+                }
+                Ok(_) => {
+                    // Other events, ignore
+                }
+                Err(e) => {
+                    error!("Connection error: {:?}", e);
+                    break;
                 }
             }
         }

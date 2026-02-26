@@ -10,27 +10,10 @@ pub struct Config {
     pub publish_topic: String,
     pub client_id: String,
     pub pulses_per_liter: u32,
-    pub gap_fill_mode: GapFillMode,
-    pub gap_threshold_ms: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum GapFillMode {
-    LastKnown,
-    Zero,
 }
 
 impl Config {
     pub fn from_env() -> Self {
-        let gap_fill_mode = match env::var("GAP_FILL_MODE")
-            .unwrap_or_else(|_| "last".to_string())
-            .to_lowercase()
-            .as_str()
-        {
-            "zero" => GapFillMode::Zero,
-            _ => GapFillMode::LastKnown,
-        };
-
         Config {
             mqtt_broker: env::var("MQTT_BROKER").unwrap_or_else(|_| "homeassistant".to_string()),
             mqtt_port: env::var("MQTT_PORT")
@@ -48,11 +31,6 @@ impl Config {
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(433),
-            gap_fill_mode,
-            gap_threshold_ms: env::var("GAP_THRESHOLD_MS")
-                .ok()
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(2000),
         }
     }
 }

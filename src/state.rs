@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Shared state for the service
 pub type SharedState = Arc<Mutex<ServiceState>>;
@@ -13,8 +13,6 @@ pub struct ServiceState {
     pub last_sensor_time_ms: u64,
     /// Whether we've received the first message
     pub is_initialized: bool,
-    /// Time when service started
-    pub service_start_time: Instant,
     /// Timestamp of last data received (ms since epoch)
     pub last_data_receive_time_ms: Option<u64>,
     /// Set of all published timestamps (both zero and data) to prevent duplicates
@@ -27,7 +25,6 @@ impl ServiceState {
             last_l_per_min: 0.0,
             last_sensor_time_ms: 0,
             is_initialized: false,
-            service_start_time: Instant::now(),
             last_data_receive_time_ms: None,
             published_timestamps: HashSet::new(),
         }
@@ -46,17 +43,6 @@ impl ServiceState {
     /// Mark timestamp as published
     pub fn mark_timestamp_published(&mut self, timestamp: &str) {
         self.published_timestamps.insert(timestamp.to_string());
-    }
-
-    /// Check if we should publish a zero entry (prevents duplicate timestamps)
-    pub fn should_publish_zero(&mut self, timestamp: &str) -> bool {
-        if self.is_timestamp_published(timestamp) {
-            // Already published by zero or data, skip it
-            return false;
-        }
-        // Mark as published and allow
-        self.mark_timestamp_published(timestamp);
-        true
     }
 }
 

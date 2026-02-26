@@ -1,6 +1,5 @@
-use crate::config::GapFillMode;
 use crate::models::{OutputMessage, SensorData, TimeseriesEntry};
-use crate::state::{current_time_ms, ServiceState};
+use crate::state::ServiceState;
 use chrono::{DateTime, FixedOffset, TimeZone};
 
 // Hardcoded timezone offset for UTC+8 (Asia/Singapore, Hong Kong, etc.)
@@ -22,29 +21,19 @@ pub fn calculate_l_per_min(pulses: u32, seconds: u64, pulses_per_liter: u32) -> 
 /// Uses hardcoded UTC+8 offset for production
 fn ms_to_timestamp(ms: u64) -> String {
     // Create timezone offset for UTC+8
-    let offset =
-        FixedOffset::east_opt(TIMEZONE_OFFSET_HOURS * 3600).unwrap_or(FixedOffset::east(0));
+    let offset = FixedOffset::east_opt(TIMEZONE_OFFSET_HOURS * 3600)
+        .unwrap_or_else(|| FixedOffset::east_opt(0).unwrap());
     let datetime: DateTime<FixedOffset> = offset.timestamp_millis_opt(ms as i64).unwrap();
     datetime.format("%d %b %Y %H:%M:%S").to_string()
-}
-
-/// Generate a single zero entry for the current time
-pub fn generate_zero_entry() -> TimeseriesEntry {
-    let now_ms = current_time_ms();
-    TimeseriesEntry {
-        timestamp: ms_to_timestamp(now_ms),
-        flow_rate_lpm: 0.0,
-    }
 }
 
 /// Process sensor data and generate output with timestamps
 ///
 /// Returns an array of TimeseriesEntry with timestamps going backward from receive_time
+/// Automatically fills any gaps with zero entries to ensure no data is missed
 pub fn process_sensor_data(
     data: SensorData,
     state: &mut ServiceState,
-    _gap_fill_mode: GapFillMode,
-    gap_threshold_ms: u64,
     pulses_per_liter: u32,
     receive_time_ms: u64,
 ) -> OutputMessage {
@@ -91,31 +80,27 @@ pub fn process_sensor_data(
         return OutputMessage::new(timeseries, false, 0);
     }
 
-    // Calculate gap since last message
+    // Calculate gap since last message and always fill
     let time_delta = receive_time_ms.saturating_sub(state.last_sensor_time_ms);
+    let gap_seconds = time_delta.saturating_sub(data.time_ms) / 1000;
 
-    // Check if there's a gap
-    if time_delta > gap_threshold_ms {
-        let gap_seconds = time_delta.saturating_sub(data.time_ms) / 1000;
+    if gap_seconds > 0 {
+        warn!(
+            "Gap detected: {} seconds since last message (from {} to {})",
+            gap_seconds,
+            ms_to_timestamp(state.last_sensor_time_ms),
+            ms_to_timestamp(receive_time_ms)
+        );
+        gap_filled = true;
 
-        if gap_seconds > 0 {
-            warn!(
-                "Gap detected: {} seconds since last message (from {} to {})",
-                gap_seconds,
-                ms_to_timestamp(state.last_sensor_time_ms),
-                ms_to_timestamp(receive_time_ms)
-            );
-            gap_filled = true;
-
-            // Fill gap with zeros going back from sensor_start_time
-            for i in (1..=gap_seconds).rev() {
-                let gap_time_ms = sensor_start_time_ms.saturating_sub(i * 1000);
-                timeseries.push(TimeseriesEntry {
-                    timestamp: ms_to_timestamp(gap_time_ms),
-                    flow_rate_lpm: 0.0,
-                });
-                zero_entries_count += 1;
-            }
+        // Fill gap with zeros going back from sensor_start_time
+        for i in (1..=gap_seconds).rev() {
+            let gap_time_ms = sensor_start_time_ms.saturating_sub(i * 1000);
+            timeseries.push(TimeseriesEntry {
+                timestamp: ms_to_timestamp(gap_time_ms),
+                flow_rate_lpm: 0.0,
+            });
+            zero_entries_count += 1;
         }
     }
 
@@ -156,14 +141,7 @@ mod tests {
         };
 
         let receive_time = 1705336230000u64; // Some arbitrary time
-        let output = process_sensor_data(
-            data,
-            &mut state,
-            GapFillMode::LastKnown,
-            2000,
-            433,
-            receive_time,
-        );
+        let output = process_sensor_data(data, &mut state, 433, receive_time);
 
         assert_eq!(output.timeseries.len(), 1);
         assert!(!output.metadata.gap_filled);
@@ -181,14 +159,7 @@ mod tests {
             time_ms: 1000,
         };
         let receive_time1 = 1705336230000u64;
-        process_sensor_data(
-            data1,
-            &mut state,
-            GapFillMode::LastKnown,
-            2000,
-            433,
-            receive_time1,
-        );
+        process_sensor_data(data1, &mut state, 433, receive_time1);
 
         // Second message after 5 second gap, with 2 seconds of data
         let data2 = SensorData {
@@ -196,14 +167,7 @@ mod tests {
             time_ms: 2000, // 2 seconds
         };
         let receive_time2 = receive_time1 + 5000; // 5 seconds later
-        let output = process_sensor_data(
-            data2,
-            &mut state,
-            GapFillMode::LastKnown,
-            2000,
-            433,
-            receive_time2,
-        );
+        let output = process_sensor_data(data2, &mut state, 433, receive_time2);
 
         // Should have: 3 zero entries (gap) + 2 actual entries = 5 total
         assert_eq!(output.timeseries.len(), 5);
@@ -231,14 +195,7 @@ mod tests {
         };
 
         let receive_time = 1705336230000u64;
-        let output = process_sensor_data(
-            data,
-            &mut state,
-            GapFillMode::LastKnown,
-            2000,
-            433,
-            receive_time,
-        );
+        let output = process_sensor_data(data, &mut state, 433, receive_time);
 
         // Should return 0 L/min since no pulses detected during setup
         assert_eq!(output.timeseries.len(), 10); // 10 seconds
@@ -247,18 +204,5 @@ mod tests {
         assert_eq!(output.metadata.zero_entries_count, 0);
         assert!(state.is_initialized);
         assert_eq!(state.last_l_per_min, 0.0);
-    }
-
-    #[test]
-    fn test_generate_zero_entry() {
-        let entry = generate_zero_entry();
-        assert_eq!(entry.flow_rate_lpm, 0.0);
-        // Should have a valid timestamp format with month name (e.g., "25 Feb 2026 09:11:21")
-        assert!(entry.timestamp.contains(' '));
-        // Should contain a 3-letter month abbreviation
-        let months = [
-            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        ];
-        assert!(months.iter().any(|&m| entry.timestamp.contains(m)));
     }
 }

@@ -63,11 +63,3 @@ impl OutputMessage {
         }
     }
 }
-
-/// Creates a zero-value entry for the current time
-pub fn create_zero_entry(timestamp_str: String) -> TimeseriesEntry {
-    TimeseriesEntry {
-        timestamp: timestamp_str,
-        flow_rate_lpm: 0.0,
-    }
-}
