@@ -36,13 +36,12 @@ async fn handle_message(
     config: &Config,
     state: SharedState,
 ) -> Result<(), rumqttc::ClientError> {
-    let topic = publish.topic.clone();
     let payload_str = String::from_utf8_lossy(&publish.payload);
     
     // Get receive timestamp
     let receive_time_ms = current_time_ms();
     
-    debug!("Received message on {}: {}", topic, payload_str);
+    debug!("Received message on {}: {}", publish.topic, payload_str);
     
     // Parse JSON payload
     let sensor_data: SensorData = match serde_json::from_str(&payload_str) {
@@ -59,7 +58,7 @@ async fn handle_message(
     );
     
     // Process the data
-    let output = {
+    let entries = {
         let mut state_guard = state.lock().unwrap();
         state_guard.update_last_receive(receive_time_ms);
         process_sensor_data(
@@ -70,64 +69,48 @@ async fn handle_message(
         )
     };
     
-    // Filter out timestamps that have already been published (Question 3 = B: Skip existing)
-    let entries_to_publish: Vec<_> = {
-        let mut state_guard = state.lock().unwrap();
-        output.timeseries
-            .into_iter()
-            .filter(|entry| {
-                if state_guard.is_timestamp_published(&entry.timestamp) {
-                    debug!("Skipping already published timestamp: {}", entry.timestamp);
-                    false
-                } else {
-                    state_guard.mark_timestamp_published(&entry.timestamp);
-                    true
+    // Publish each entry individually, filtering duplicates
+    let mut published_count = 0;
+    let mut skipped_count = 0;
+    
+    for entry in entries {
+        // Check if timestamp was already published
+        let should_publish = {
+            let mut state_guard = state.lock().unwrap();
+            if state_guard.is_timestamp_published(entry.timestamp) {
+                debug!("Skipping already published timestamp: {}", entry.timestamp);
+                skipped_count += 1;
+                false
+            } else {
+                state_guard.mark_timestamp_published(entry.timestamp);
+                true
+            }
+        };
+        
+        if should_publish {
+            // Serialize and publish
+            match serde_json::to_string(&entry) {
+            Ok(json) => {
+                client.publish(PUBLISH_TOPIC, QoS::AtLeastOnce, false, json.clone()).await?;
+                published_count += 1;
+                debug!("Published: {}", json);
+            }
+                Err(e) => {
+                    error!("Failed to serialize entry: {}", e);
                 }
-            })
-            .collect()
-    };
-    
-    // Skip if all timestamps already published
-    if entries_to_publish.is_empty() {
-        info!("All timestamps already published, skipping");
-        return Ok(());
-    }
-    
-    // Serialize: always as array
-    let response = match serde_json::to_string(&entries_to_publish) {
-        Ok(json) => json,
-        Err(e) => {
-            error!("Failed to serialize output: {}", e);
-            return Ok(());
+            }
         }
-    };
-    
-    // Publish to MQTT
-    client.publish(PUBLISH_TOPIC, QoS::AtLeastOnce, false, response.clone()).await?;
-    
-    info!(
-        "Published {} entries ({} gap-filled with zeros) to {}",
-        entries_to_publish.len(),
-        output.metadata.zero_entries_count,
-        PUBLISH_TOPIC
-    );
-    
-    // Log the first and last entries for verification
-    if let Some(first) = entries_to_publish.first() {
-        debug!("First entry: {} = {} L/min", first.timestamp, first.flow_rate_lpm);
-    }
-    if let Some(last) = entries_to_publish.last() {
-        debug!("Last entry: {} = {} L/min", last.timestamp, last.flow_rate_lpm);
     }
     
-    debug!("Published data: {}", response);
+    info!("Published {} entries, skipped {} duplicates to {}", 
+          published_count, skipped_count, PUBLISH_TOPIC);
     
     Ok(())
 }
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(log::Level::Info).unwrap();
     
     let config = Config::from_env();
     let state = create_state();
