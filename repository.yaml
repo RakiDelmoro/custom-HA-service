@@ -1,3 +1,16 @@
+# This file is required for Home Assistant Add-on Repository discovery
+# 
+# When users add your GitHub repository to Home Assistant via:
+# Settings → Add-ons → Add-on Store → ⋮ → Repositories
+# 
+# Home Assistant reads this file to display your repository in the UI
+# and identify it as a valid add-on source.
+#
+# Fields:
+# - name: Display name shown in HA Add-on Store
+# - url: GitHub repository URL
+# - maintainer: Your name or organization
+
 name: FlowPulse MQTT
 url: https://github.com/RakiDelmoro/custom-ha-service
 maintainer: Raki Delmoro
