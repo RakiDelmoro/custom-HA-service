@@ -1,6 +1,6 @@
-# Water Flow MQTT Service
+# FlowPulse MQTT
 
-MQTT service that converts pulse sensor data to flow rates (L/min) for Home Assistant.
+Convert pulse sensor data to water flow rates (L/min) for Home Assistant.
 
 ## What It Does
 
@@ -19,7 +19,7 @@ Add this repository to your Home Assistant:
 
 1. Go to **Settings** → **Add-ons** → **Add-on Store**
 2. Click **⋮** → **Repositories** → Add `https://github.com/RakiDelmoro/custom-ha-service`
-3. Find "Custom HA Service" → **Install** → **Start**
+3. Find "FlowPulse MQTT" → **Install** → **Start**
 
 ### Option 2: Fork & Customize
 
@@ -31,7 +31,7 @@ Want to modify the code? Fork this repository first:
 
 ## Configuration
 
-Configure in Home Assistant: **Settings** → **Add-ons** → **Custom HA Service** → **Configuration**
+Configure in Home Assistant: **Settings** → **Add-ons** → **FlowPulse MQTT** → **Configuration**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -41,7 +41,7 @@ Configure in Home Assistant: **Settings** → **Add-ons** → **Custom HA Servic
 | `mqtt_password` | `""` | MQTT password (optional) |
 | `subscribe_topic` | `custom-service/in` | Topic to receive sensor data |
 | `publish_topic` | `custom-service/out` | Topic to publish flow rates |
-| `client_id` | `custom-ha-service` | MQTT client ID |
+| `client_id` | `flowpulse-mqtt` | MQTT client ID |
 | `pulses_per_liter` | `433` | **Your sensor's pulses per liter** (check your sensor specs) |
 
 ## Integration Example

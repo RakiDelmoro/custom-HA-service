@@ -1,7 +1,7 @@
-name: "Custom HA Service"
+name: "FlowPulse MQTT"
 version: "0.1.0"
-slug: custom-ha-service
-description: "A custom service that subscribes to MQTT topics and publishes responses"
+slug: flowpulse-mqtt
+description: "Convert pulse sensor data to water flow rates (L/min) via MQTT"
 arch:
   - aarch64
   - amd64
@@ -22,7 +22,7 @@ options:
   mqtt_password: ""
   subscribe_topic: "custom-service/in"
   publish_topic: "custom-service/out"
-  client_id: "custom-ha-service"
+  client_id: "flowpulse-mqtt"
   pulses_per_liter: 433
 schema:
   mqtt_broker: str

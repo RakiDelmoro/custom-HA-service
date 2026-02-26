@@ -3,7 +3,7 @@
 # Home Assistant addon configuration
 set -e
 
-bashio::log.info "Starting Custom HA Service..."
+bashio::log.info "Starting FlowPulse MQTT..."
 
 # Export configuration from Home Assistant addon options
 export MQTT_BROKER="$(bashio::config 'mqtt_broker')"

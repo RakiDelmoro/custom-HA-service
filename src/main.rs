@@ -132,7 +132,7 @@ async fn main() {
     let config = Config::from_env();
     let state = create_state();
     
-    info!("Starting Water Flow MQTT Service");
+    info!("Starting FlowPulse MQTT");
     info!("MQTT broker: {}:{}", config.mqtt_broker, config.mqtt_port);
     info!("Subscribe topic: {}", config.subscribe_topic);
     info!("Publish topic: {}", config.publish_topic);
