@@ -41,7 +41,7 @@ async fn publish_zero_entry(
 ) -> Result<(), rumqttc::ClientError> {
     let zero_entry = generate_zero_entry();
     
-    // Check for duplicate timestamp
+    // Check for duplicate timestamp using HashSet
     let should_publish = {
         let mut state_guard = state.lock().unwrap();
         state_guard.should_publish_zero(&zero_entry.timestamp)
@@ -112,13 +112,50 @@ async fn handle_message(
         )
     };
     
-    // Serialize just the timeseries array (not the full OutputMessage)
-    let response = match serde_json::to_string(&output.timeseries) {
-        Ok(json) => json,
-        Err(e) => {
-            error!("Failed to serialize output: {}", e);
-            SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
-            return Ok(());
+    // Filter out timestamps that have already been published (Question 3 = B: Skip existing)
+    let entries_to_publish: Vec<_> = {
+        let mut state_guard = state.lock().unwrap();
+        output.timeseries
+            .into_iter()
+            .filter(|entry| {
+                if state_guard.is_timestamp_published(&entry.timestamp) {
+                    debug!("Skipping already published timestamp: {}", entry.timestamp);
+                    false
+                } else {
+                    state_guard.mark_timestamp_published(&entry.timestamp);
+                    true
+                }
+            })
+            .collect()
+    };
+    
+    // Skip if all timestamps already published
+    if entries_to_publish.is_empty() {
+        info!("All timestamps already published, skipping");
+        SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
+        return Ok(());
+    }
+    
+    // Serialize: plain object for single entry, array for multiple (Question 2)
+    let response = if entries_to_publish.len() == 1 {
+        // Single entry: plain object
+        match serde_json::to_string(&entries_to_publish[0]) {
+            Ok(json) => json,
+            Err(e) => {
+                error!("Failed to serialize output: {}", e);
+                SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
+                return Ok(());
+            }
+        }
+    } else {
+        // Multiple entries: array
+        match serde_json::to_string(&entries_to_publish) {
+            Ok(json) => json,
+            Err(e) => {
+                error!("Failed to serialize output: {}", e);
+                SHOULD_PUBLISH_ZEROS.store(true, Ordering::SeqCst);
+                return Ok(());
+            }
         }
     };
     
@@ -127,16 +164,16 @@ async fn handle_message(
     
     info!(
         "Published {} entries ({} gap-filled with zeros) to {}",
-        output.timeseries.len(),
+        entries_to_publish.len(),
         output.metadata.zero_entries_count,
         config.publish_topic
     );
     
     // Log the first and last entries for verification
-    if let Some(first) = output.timeseries.first() {
+    if let Some(first) = entries_to_publish.first() {
         debug!("First entry: {} = {} L/min", first.timestamp, first.flow_rate_lpm);
     }
-    if let Some(last) = output.timeseries.last() {
+    if let Some(last) = entries_to_publish.last() {
         debug!("Last entry: {} = {} L/min", last.timestamp, last.flow_rate_lpm);
     }
     

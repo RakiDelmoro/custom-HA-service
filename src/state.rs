@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -16,8 +17,8 @@ pub struct ServiceState {
     pub service_start_time: Instant,
     /// Timestamp of last data received (ms since epoch)
     pub last_data_receive_time_ms: Option<u64>,
-    /// Last zero publish timestamp string (to prevent duplicates)
-    pub last_zero_publish_timestamp: Option<String>,
+    /// Set of all published timestamps (both zero and data) to prevent duplicates
+    pub published_timestamps: HashSet<String>,
 }
 
 impl ServiceState {
@@ -28,7 +29,7 @@ impl ServiceState {
             is_initialized: false,
             service_start_time: Instant::now(),
             last_data_receive_time_ms: None,
-            last_zero_publish_timestamp: None,
+            published_timestamps: HashSet::new(),
         }
     }
 
@@ -37,16 +38,24 @@ impl ServiceState {
         self.last_data_receive_time_ms = Some(timestamp_ms);
     }
 
+    /// Check if timestamp was already published (by zero OR data)
+    pub fn is_timestamp_published(&self, timestamp: &str) -> bool {
+        self.published_timestamps.contains(timestamp)
+    }
+
+    /// Mark timestamp as published
+    pub fn mark_timestamp_published(&mut self, timestamp: &str) {
+        self.published_timestamps.insert(timestamp.to_string());
+    }
+
     /// Check if we should publish a zero entry (prevents duplicate timestamps)
     pub fn should_publish_zero(&mut self, timestamp: &str) -> bool {
-        if let Some(ref last) = self.last_zero_publish_timestamp {
-            if last == timestamp {
-                // Same timestamp as last publish, skip it
-                return false;
-            }
+        if self.is_timestamp_published(timestamp) {
+            // Already published by zero or data, skip it
+            return false;
         }
-        // Update and allow publish
-        self.last_zero_publish_timestamp = Some(timestamp.to_string());
+        // Mark as published and allow
+        self.mark_timestamp_published(timestamp);
         true
     }
 }
