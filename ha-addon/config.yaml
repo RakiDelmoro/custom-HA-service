@@ -23,6 +23,7 @@ options:
   subscribe_topic: "custom-service/in"
   publish_topic: "custom-service/out"
   client_id: "custom-ha-service"
+  pulses_per_liter: 433
 schema:
   mqtt_broker: str
   mqtt_port: int
@@ -31,3 +32,4 @@ schema:
   subscribe_topic: str
   publish_topic: str
   client_id: str
+  pulses_per_liter: int

@@ -31,16 +31,18 @@ Want to modify the code? Fork this repository first:
 
 ## Configuration
 
+Configure in Home Assistant: **Settings** → **Add-ons** → **Custom HA Service** → **Configuration**
+
 | Option | Default | Description |
 |--------|---------|-------------|
-| `mqtt_broker` | `homeassistant` | MQTT broker host |
+| `mqtt_broker` | `homeassistant` | MQTT broker host/IP |
 | `mqtt_port` | `1883` | MQTT port |
 | `mqtt_username` | `""` | MQTT username (optional) |
 | `mqtt_password` | `""` | MQTT password (optional) |
-| `subscribe_topic` | `custom-service/in` | Input topic |
-| `publish_topic` | `custom-service/out` | Output topic |
+| `subscribe_topic` | `custom-service/in` | Topic to receive sensor data |
+| `publish_topic` | `custom-service/out` | Topic to publish flow rates |
 | `client_id` | `custom-ha-service` | MQTT client ID |
-| `pulses_per_liter` | `433` | Your sensor's pulses per liter |
+| `pulses_per_liter` | `433` | **Your sensor's pulses per liter** (check your sensor specs) |
 
 ## Integration Example
 
