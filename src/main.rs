@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use log::{info, error, debug, warn};
 
-use config::Config;
+use config::{Config, PUBLISH_TOPIC};
 use models::SensorData;
 use processor::process_sensor_data;
 use state::{create_state, current_time_ms, SharedState};
@@ -103,13 +103,13 @@ async fn handle_message(
     };
     
     // Publish to MQTT
-    client.publish(&config.publish_topic, QoS::AtLeastOnce, false, response.clone()).await?;
+    client.publish(PUBLISH_TOPIC, QoS::AtLeastOnce, false, response.clone()).await?;
     
     info!(
         "Published {} entries ({} gap-filled with zeros) to {}",
         entries_to_publish.len(),
         output.metadata.zero_entries_count,
-        config.publish_topic
+        PUBLISH_TOPIC
     );
     
     // Log the first and last entries for verification
@@ -135,7 +135,7 @@ async fn main() {
     info!("Starting FlowPulse MQTT");
     info!("MQTT broker: {}:{}", config.mqtt_broker, config.mqtt_port);
     info!("Subscribe topic: {}", config.subscribe_topic);
-    info!("Publish topic: {}", config.publish_topic);
+    info!("Publish topic: {}", PUBLISH_TOPIC);
     info!("Pulses per liter: {}", config.pulses_per_liter);
     
     loop {

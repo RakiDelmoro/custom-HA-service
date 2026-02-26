@@ -40,9 +40,10 @@ Configure in Home Assistant: **Settings** → **Add-ons** → **FlowPulse MQTT**
 | `mqtt_username` | `""` | MQTT username (optional) |
 | `mqtt_password` | `""` | MQTT password (optional) |
 | `subscribe_topic` | `custom-service/in` | Topic to receive sensor data |
-| `publish_topic` | `custom-service/out` | Topic to publish flow rates |
 | `client_id` | `flowpulse-mqtt` | MQTT client ID |
 | `pulses_per_liter` | `433` | **Your sensor's pulses per liter** (check your sensor specs) |
+
+This service publishes to: `flowpulse/out`
 
 ## Integration Example
 
@@ -51,7 +52,7 @@ Configure in Home Assistant: **Settings** → **Add-ons** → **FlowPulse MQTT**
 mosquitto_pub -t custom-service/in -m '{"total_pulses": 433, "Time_ms": 10000}'
 ```
 
-**Receive on `custom-service/out`:**
+**Receive on `flowpulse/out`:**
 ```json
 [
   {"timestamp": "25 Feb 2026 10:00:20", "flow_rate_lpm": 60.0},
@@ -122,7 +123,6 @@ cargo build --release
 export MQTT_BROKER=localhost
 export MQTT_PORT=1883
 export SUBSCRIBE_TOPIC=custom-service/in
-export PUBLISH_TOPIC=custom-service/out
 export PULSES_PER_LITER=433
 ./target/release/custom-ha-service
 ```

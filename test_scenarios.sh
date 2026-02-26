@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Test Script for Custom HA Service
+# Test Script for FlowPulse MQTT
 # Tests scenarios with mock MQTT data
 # Note: Service only publishes when subscriber message arrives
 
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}=== Custom HA Service Test Suite ===${NC}"
+echo -e "${GREEN}=== FlowPulse MQTT Test Suite ===${NC}"
 echo ""
 
 # Check if MQTT broker is running, if not start one
@@ -26,15 +26,14 @@ fi
 export MQTT_BROKER=localhost
 export MQTT_PORT=1883
 export SUBSCRIBE_TOPIC=custom-service/in
-export PUBLISH_TOPIC=custom-service/out
-export CLIENT_ID=custom-ha-service-test
+export CLIENT_ID=flowpulse-mqtt-test
 export PULSES_PER_LITER=433
 export RUST_LOG=info
 
 echo -e "${YELLOW}Test Configuration:${NC}"
 echo "  MQTT Broker: $MQTT_BROKER:$MQTT_PORT"
 echo "  Subscribe: $SUBSCRIBE_TOPIC"
-echo "  Publish: $PUBLISH_TOPIC"
+echo "  Publish: flowpulse/out (fixed)"
 echo ""
 
 # Build the service if needed
