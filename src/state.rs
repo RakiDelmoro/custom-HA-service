@@ -15,8 +15,8 @@ pub struct ServiceState {
     pub is_initialized: bool,
     /// Timestamp of last data received (ms since epoch)
     pub last_data_receive_time_ms: Option<u64>,
-    /// Set of all published timestamps (both zero and data) to prevent duplicates
-    pub published_timestamps: HashSet<String>,
+    /// Set of all published timestamps to prevent duplicates
+    pub published_timestamps: HashSet<u64>,
 }
 
 impl ServiceState {
@@ -35,14 +35,14 @@ impl ServiceState {
         self.last_data_receive_time_ms = Some(timestamp_ms);
     }
 
-    /// Check if timestamp was already published (by zero OR data)
-    pub fn is_timestamp_published(&self, timestamp: &str) -> bool {
-        self.published_timestamps.contains(timestamp)
+    /// Check if timestamp was already published
+    pub fn is_timestamp_published(&self, timestamp: u64) -> bool {
+        self.published_timestamps.contains(&timestamp)
     }
 
     /// Mark timestamp as published
-    pub fn mark_timestamp_published(&mut self, timestamp: &str) {
-        self.published_timestamps.insert(timestamp.to_string());
+    pub fn mark_timestamp_published(&mut self, timestamp: u64) {
+        self.published_timestamps.insert(timestamp);
     }
 }
 
