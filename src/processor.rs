@@ -81,8 +81,9 @@ pub fn process_sensor_data(
     }
 
     // Calculate gap since last message and always fill
+    // Round up to ensure no gaps are missed (add 999ms before dividing)
     let time_delta = receive_time_ms.saturating_sub(state.last_sensor_time_ms);
-    let gap_seconds = time_delta.saturating_sub(data.time_ms) / 1000;
+    let gap_seconds = time_delta.saturating_sub(data.time_ms).saturating_add(999) / 1000;
 
     if gap_seconds > 0 {
         warn!(
