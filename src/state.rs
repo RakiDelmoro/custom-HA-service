@@ -9,8 +9,9 @@ pub type SharedState = Arc<Mutex<ServiceState>>;
 pub struct ServiceState {
     /// Last calculated L/min value
     pub last_l_per_min: f64,
-    /// Timestamp of last sensor message (ms since epoch)
-    pub last_sensor_time_ms: u64,
+    /// Timestamp of last published data point (ms since epoch)
+    /// This tracks the most recent timestamp that was published to MQTT
+    pub last_published_timestamp: u64,
     /// Whether we've received the first message
     pub is_initialized: bool,
     /// Timestamp of last data received (ms since epoch)
@@ -19,11 +20,17 @@ pub struct ServiceState {
     pub published_timestamps: HashSet<u64>,
 }
 
+impl Default for ServiceState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServiceState {
     pub fn new() -> Self {
         ServiceState {
             last_l_per_min: 0.0,
-            last_sensor_time_ms: 0,
+            last_published_timestamp: 0,
             is_initialized: false,
             last_data_receive_time_ms: None,
             published_timestamps: HashSet::new(),

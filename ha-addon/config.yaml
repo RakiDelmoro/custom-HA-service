@@ -22,6 +22,7 @@ options:
   mqtt_password: ""
   subscribe_topic: "custom-service/in"
   client_id: "flowpulse-mqtt"
+  publish_topic: "flowpulse/out"
   pulses_per_liter: 433
 schema:
   mqtt_broker: str
@@ -30,4 +31,5 @@ schema:
   mqtt_password: str?
   subscribe_topic: str
   client_id: str
+  publish_topic: str
   pulses_per_liter: int
