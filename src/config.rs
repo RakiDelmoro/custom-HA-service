@@ -1,8 +1,5 @@
 use std::env;
 
-/// Fixed publish topic for FlowPulse MQTT
-pub const PUBLISH_TOPIC: &str = "flowpulse/out";
-
 #[derive(Debug, Clone)]
 pub struct Config {
     pub mqtt_broker: String,
@@ -11,6 +8,7 @@ pub struct Config {
     pub mqtt_password: Option<String>,
     pub subscribe_topic: String,
     pub client_id: String,
+    pub publish_topic: String,
     pub pulses_per_liter: u32,
 }
 
@@ -27,6 +25,8 @@ impl Config {
             subscribe_topic: env::var("SUBSCRIBE_TOPIC")
                 .unwrap_or_else(|_| "custom-service/in".to_string()),
             client_id: env::var("CLIENT_ID").unwrap_or_else(|_| "flowpulse-mqtt".to_string()),
+            publish_topic: env::var("PUBLISH_TOPIC")
+                .unwrap_or_else(|_| "flowpulse/out".to_string()),
             pulses_per_liter: env::var("PULSES_PER_LITER")
                 .ok()
                 .and_then(|p| p.parse().ok())
