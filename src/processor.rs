@@ -18,7 +18,7 @@ pub fn calculate_l_per_min(pulses: u32, seconds: u64, pulses_per_liter: u32) -> 
 /// Automatically fills any gaps with zero entries to ensure no data is missed
 ///
 /// Gap calculation:
-/// - gap_ms = receive_time_ms - last_published_timestamp - time_ms
+/// - gap_seconds = receive_time_sec - last_published_timestamp - seconds
 /// - Gap timestamps are filled with 0 L/min
 /// - Actual data timestamps get calculated L/min from sensor data
 ///
@@ -28,34 +28,30 @@ pub fn process_sensor_data(
     data: SensorData,
     state: &mut ServiceState,
     pulses_per_liter: u32,
-    receive_time_ms: u64,
+    receive_time_sec: u64,
 ) -> Vec<TimeseriesEntry> {
-    // Round sensor duration to nearest second to handle variable ESP32 timing
-    // ESP32 sends time_ms like 1000, 1030, 1425, 15060 - round to nearest 1000ms
-    let rounded_time_ms = ((data.time_ms + 500) / 1000) * 1000;
-    let seconds = rounded_time_ms / 1000;
+    // Convert ms to seconds, rounding to nearest second
+    let seconds = ((data.time_ms + 500) / 1000) as u64;
 
     debug!(
-        "Processing: {} pulses over {} ms (rounded to {} ms, {} seconds), received at epoch {}",
-        data.total_pulses, data.time_ms, rounded_time_ms, seconds, receive_time_ms
+        "Processing: {} pulses over {} ms (rounded to {} seconds), received at epoch {}",
+        data.total_pulses, data.time_ms, seconds, receive_time_sec
     );
 
-    // Calculate L/min from current data (use actual pulses, rounded seconds)
+    // Calculate L/min from current data
     let current_l_per_min = calculate_l_per_min(data.total_pulses, seconds, pulses_per_liter);
 
-    // Calculate the start time of this sensor data
-    // start_time = receive_time - sensor_duration (using rounded time)
-    let raw_sensor_start_time_ms = receive_time_ms.saturating_sub(rounded_time_ms);
+    // Calculate the start time of this sensor data (in seconds)
+    let raw_sensor_start_time_sec = receive_time_sec.saturating_sub(seconds);
 
     // For first message, just use the calculated start time
     // For subsequent messages, ensure we don't overlap with last published timestamp
-    let sensor_start_time_ms = if !state.is_initialized {
-        raw_sensor_start_time_ms
+    let sensor_start_time_sec = if !state.is_initialized {
+        raw_sensor_start_time_sec
     } else {
         // Ensure sensor_start_time is always after last_published_timestamp
-        // This prevents duplicate/overlapping timestamps when ESP32 timing varies
-        let min_start_time = state.last_published_timestamp + 1000;
-        std::cmp::max(raw_sensor_start_time_ms, min_start_time)
+        let min_start_time = state.last_published_timestamp + 1;
+        std::cmp::max(raw_sensor_start_time_sec, min_start_time)
     };
 
     let mut timeseries = Vec::new();
@@ -64,70 +60,65 @@ pub fn process_sensor_data(
     if !state.is_initialized {
         info!(
             "First sensor message received at epoch {}, initializing state",
-            receive_time_ms
+            receive_time_sec
         );
         state.is_initialized = true;
         state.last_l_per_min = current_l_per_min;
 
         // For first message, return entries for the sensor data duration
         for i in 0..seconds {
-            let entry_time_ms = sensor_start_time_ms + (i * 1000);
+            let entry_time_sec = sensor_start_time_sec + i;
             timeseries.push(TimeseriesEntry {
-                timestamp: entry_time_ms,
+                timestamp: entry_time_sec,
                 flow_rate_lpm: current_l_per_min,
             });
         }
 
         // Update last_published_timestamp to the end of this data
         if seconds > 0 {
-            state.last_published_timestamp = sensor_start_time_ms + ((seconds - 1) * 1000);
+            state.last_published_timestamp = sensor_start_time_sec + (seconds - 1);
         }
 
         return timeseries;
     }
 
-    // Calculate gap since last published timestamp
-    // Gap = receive_time_ms - last_published_timestamp - rounded_time_ms
-    // Use rounded_time_ms for consistent gap calculation despite ESP32 timing variations
-    let total_time_since_last = receive_time_ms.saturating_sub(state.last_published_timestamp);
-    let gap_ms = total_time_since_last.saturating_sub(rounded_time_ms);
-    let gap_seconds = gap_ms / 1000;
+    // Calculate gap since last published timestamp (in seconds)
+    let total_time_since_last = receive_time_sec.saturating_sub(state.last_published_timestamp);
+    let gap_seconds = total_time_since_last.saturating_sub(seconds);
 
     if gap_seconds > 0 {
         warn!(
             "Gap detected: {} seconds (from {} to {})",
-            gap_seconds, state.last_published_timestamp, sensor_start_time_ms
+            gap_seconds, state.last_published_timestamp, sensor_start_time_sec
         );
 
         // Fill gap with zeros
-        // Gap timestamps go from last_published_timestamp + 1000ms to sensor_start_time_ms - 1000ms
-        let gap_start_ms = state.last_published_timestamp + 1000;
-        let gap_end_ms = sensor_start_time_ms;
+        let gap_start_sec = state.last_published_timestamp + 1;
+        let gap_end_sec = sensor_start_time_sec;
 
-        let mut current_gap_ms = gap_start_ms;
-        while current_gap_ms < gap_end_ms {
+        let mut current_gap_sec = gap_start_sec;
+        while current_gap_sec < gap_end_sec {
             timeseries.push(TimeseriesEntry {
-                timestamp: current_gap_ms,
+                timestamp: current_gap_sec,
                 flow_rate_lpm: 0.0,
             });
-            current_gap_ms += 1000;
+            current_gap_sec += 1;
         }
     }
 
     // Add current data entries
     for i in 0..seconds {
-        let entry_time_ms = sensor_start_time_ms + (i * 1000);
+        let entry_time_sec = sensor_start_time_sec + i;
         timeseries.push(TimeseriesEntry {
-            timestamp: entry_time_ms,
+            timestamp: entry_time_sec,
             flow_rate_lpm: current_l_per_min,
         });
     }
 
     // Update state
     state.last_l_per_min = current_l_per_min;
-    // Update last_published_timestamp to the end of current data
     if seconds > 0 {
-        state.last_published_timestamp = sensor_start_time_ms + ((seconds - 1) * 1000);
+        state.last_published_timestamp = sensor_start_time_sec + (seconds - 1);
     }
 
     timeseries
