@@ -12,7 +12,8 @@ pub struct SensorData {
 /// Single timeseries entry with timestamp and flow rate
 #[derive(Debug, Serialize, Clone)]
 pub struct TimeseriesEntry {
-    /// Unix timestamp in milliseconds
+    /// Unix timestamp in seconds (UTC)
+    #[serde(rename = "timestamp")]
     pub timestamp: u64,
     /// Flow rate in liters per minute
     #[serde(rename = "flow_rate_lpm")]
