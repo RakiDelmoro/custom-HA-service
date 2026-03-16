@@ -10,10 +10,10 @@ use rumqttc::{
 use std::time::Duration;
 use tokio::time::sleep;
 
-use config::{Config, PUBLISH_TOPIC};
+use config::Config;
 use models::SensorData;
 use processor::process_sensor_data;
-use state::{create_state, current_time_ms, SharedState};
+use state::{create_state, current_time_secs, SharedState};
 
 async fn create_mqtt_client(config: &Config) -> (AsyncClient, EventLoop) {
     let mut mqttoptions =
@@ -40,8 +40,8 @@ async fn handle_message(
     state: SharedState,
 ) -> Result<(), rumqttc::ClientError> {
     let payload_str = String::from_utf8_lossy(&publish.payload);
-    // Get receive timestamp
-    let receive_time_ms = current_time_ms();
+    // Get receive timestamp (seconds since epoch)
+    let receive_time_sec = current_time_secs();
 
     debug!("Received message on {}: {}", publish.topic, payload_str);
 
@@ -60,16 +60,16 @@ async fn handle_message(
     );
 
     // Process the data
-    let entries = {
-        let mut state_guard = state.lock().unwrap();
-        state_guard.update_last_receive(receive_time_ms);
-        process_sensor_data(
-            sensor_data,
-            &mut state_guard,
-            config.pulses_per_liter,
-            receive_time_ms,
-        )
-    };
+        let entries = {
+            let mut state_guard = state.lock().unwrap();
+            state_guard.update_last_receive(receive_time_sec);
+            process_sensor_data(
+                sensor_data,
+                &mut state_guard,
+                config.pulses_per_liter,
+                receive_time_sec,
+            )
+        };
 
     // Publish each entry individually, filtering duplicates
     let mut published_count = 0;
@@ -94,7 +94,7 @@ async fn handle_message(
             match serde_json::to_string(&entry) {
                 Ok(json) => {
                     client
-                        .publish(PUBLISH_TOPIC, QoS::AtLeastOnce, false, json.clone())
+                        .publish(&config.publish_topic, QoS::AtLeastOnce, false, json.clone())
                         .await?;
                     published_count += 1;
                     debug!("Published: {}", json);
@@ -108,7 +108,7 @@ async fn handle_message(
 
     info!(
         "Published {} entries, skipped {} duplicates to {}",
-        published_count, skipped_count, PUBLISH_TOPIC
+        published_count, skipped_count, config.publish_topic
     );
 
     Ok(())
@@ -124,7 +124,7 @@ async fn main() {
     info!("Starting FlowPulse MQTT");
     info!("MQTT broker: {}:{}", config.mqtt_broker, config.mqtt_port);
     info!("Subscribe topic: {}", config.subscribe_topic);
-    info!("Publish topic: {}", PUBLISH_TOPIC);
+            info!("Publish topic: {}", config.publish_topic);
     info!("Pulses per liter: {}", config.pulses_per_liter);
 
     loop {
