@@ -54,6 +54,7 @@ impl ServiceState {
 }
 
 /// Get current time in seconds since epoch
+#[allow(dead_code)]
 pub fn current_time_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
