@@ -53,12 +53,13 @@ impl ServiceState {
     }
 }
 
-/// Get current time in milliseconds since epoch
-pub fn current_time_ms() -> u64 {
+/// Get current time in seconds since epoch
+#[allow(dead_code)]
+pub fn current_time_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis() as u64
+        .as_secs()
 }
 
 /// Create shared state

@@ -1,2 +1,41 @@
+# Rust
 /target
+**/*.rs.bk
+**/*.pdb
+**/*.ilk
+**/*.obj
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+**/*.lib
+**/*.a
+**/*.libc
+.cargo
+**/*.rs~ 
+**/*.sw?
+*~
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
 HA-mqtt-configs.sh
+*.log
+*.pid
+*.db
+
+# Build tools
+zig-*
+*.tar.xz
