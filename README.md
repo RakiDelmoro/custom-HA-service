@@ -11,47 +11,94 @@ Rust-based MQTT service converting pulse sensor data to water flow rates (L/min)
 
 ## Architecture Support
 
-`aarch64` | `amd64` | `armv7` | `armhf` | `i386`
+`aarch64` (ARM64) - Tested on Home Assistant Green and Raspberry Pi 4
 
-## Quick Start
+## Installation via USB (Offline)
 
-### 1. Build
+This method is perfect for Home Assistant devices without internet access or when you prefer offline installation.
+
+### Prerequisites
+
+- **Build Computer**: Linux/macOS with Rust installed
+- **USB Drive**: Any USB stick (FAT32/EXT4/NTFS supported)
+- **Home Assistant Device**: aarch64 architecture with terminal access (SSH or direct)
+
+---
+
+### Step 1: Build the Binary (On Your Build Computer)
+
+Open a terminal on your development/build computer:
 
 ```bash
-# Install dependencies
+# Install required Rust target
 rustup target add aarch64-unknown-linux-musl
+
+# Install cargo-zigbuild (no sudo needed)
 cargo install cargo-zigbuild
 
-# Download zig (one-time)
+# Download and setup zig (one-time setup)
 wget https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
 tar -xf zig-linux-x86_64-0.14.0.tar.xz
 export PATH="$PWD/zig-linux-x86_64-0.14.0:$PATH"
 
-# Build
+# Build static binary for aarch64
 cargo zigbuild --release --target aarch64-unknown-linux-musl
 ```
 
-Binary: `target/aarch64-unknown-linux-musl/release/custom-ha-service`
+**Output location:** `target/aarch64-unknown-linux-musl/release/custom-ha-service`
 
-### 2. Deploy to Home Assistant
+---
 
-**Via SCP:**
+### Step 2: Copy Binary to USB Drive (On Your Build Computer)
+
+Plug your USB drive into the build computer, then:
+
+**Via terminal:**
 ```bash
-scp target/aarch64-unknown-linux-musl/release/custom-ha-service root@homeassistant.local:/usr/local/bin/
-sudo chmod +x /usr/local/bin/custom-ha-service
+# Find your USB mount point (examples: /media/username/USB_NAME or /mnt/usb)
+# Copy the binary to USB
+cp target/aarch64-unknown-linux-musl/release/custom-ha-service /media/YOUR_USERNAME/YOUR_USB_NAME/
 ```
 
-**Via USB (offline):**
+**Via file manager:** Simply drag the `custom-ha-service` file from `target/aarch64-unknown-linux-musl/release/` to your USB drive.
+
+**Safely eject USB** from your build computer.
+
+---
+
+### Step 3: Transfer to Home Assistant (On HA Device)
+
+1. **Plug USB into your Home Assistant device**
+
+2. **Access HA terminal** via one of these methods:
+   - SSH: `ssh root@homeassistant.local`
+   - Terminal & SSH addon in Home Assistant UI
+   - Direct keyboard/monitor connection
+
+3. **Copy binary from USB to system:**
+
 ```bash
-sudo cp /media/usb/custom-ha-service /usr/local/bin/
+# Check USB mount location
+ls /media
+
+# Copy to system directory
+sudo cp /media/YOUR_USB_NAME/custom-ha-service /usr/local/bin/
+
+# Make it executable
 sudo chmod +x /usr/local/bin/custom-ha-service
+
+# Verify it works
+/usr/local/bin/custom-ha-service --help
 ```
 
-### 3. Create Service
+---
 
-Create `/etc/systemd/system/custom-ha-service.service`:
+### Step 4: Create Systemd Service (On HA Device)
 
-```ini
+Create the service file:
+
+```bash
+sudo tee /etc/systemd/system/custom-ha-service.service << 'EOF'
 [Unit]
 Description=FlowPulse MQTT
 After=network.target
@@ -71,15 +118,25 @@ Environment="RUST_LOG=info"
 
 [Install]
 WantedBy=multi-user.target
+EOF
 ```
 
-Enable and start:
+**Start the service:**
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable custom-ha-service
 sudo systemctl start custom-ha-service
+```
+
+**Check status:**
+
+```bash
+sudo systemctl status custom-ha-service
 journalctl -u custom-ha-service -f
 ```
+
+---
 
 ## Configuration
 
@@ -129,9 +186,13 @@ cargo run --release
 
 ## Troubleshooting
 
-- **Permission denied**: `sudo chmod +x /usr/local/bin/custom-ha-service`
-- **MQTT fails**: Check broker IP, port, credentials
-- **No output**: Set `RUST_LOG=debug` in service file
+| Issue | Solution |
+|-------|----------|
+| **USB not showing up** | Check `/media` and `/mnt` directories |
+| **Permission denied** | Run `sudo chmod +x /usr/local/bin/custom-ha-service` |
+| **Binary won't run** | Verify architecture: `file /usr/local/bin/custom-ha-service` should show "ARM aarch64" |
+| **MQTT connection fails** | Check broker IP, port, credentials |
+| **No output** | Set `RUST_LOG=debug` in service file |
 
 ## License
 
